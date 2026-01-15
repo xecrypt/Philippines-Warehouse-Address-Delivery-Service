@@ -1,0 +1,44 @@
+export enum ExceptionType {
+  MISSING_MEMBER_CODE = 'MISSING_MEMBER_CODE',
+  INVALID_MEMBER_CODE = 'INVALID_MEMBER_CODE',
+  ILLEGIBLE_LABEL = 'ILLEGIBLE_LABEL',
+  DAMAGED_PARCEL = 'DAMAGED_PARCEL',
+  DUPLICATE_TRACKING = 'DUPLICATE_TRACKING',
+  CONFLICTING_OWNERSHIP = 'CONFLICTING_OWNERSHIP',
+  OTHER = 'OTHER',
+}
+
+export enum ExceptionStatus {
+  OPEN = 'OPEN',
+  IN_PROGRESS = 'IN_PROGRESS',
+  RESOLVED = 'RESOLVED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  FAILED = 'FAILED',
+  REFUNDED = 'REFUNDED',
+}
+
+export enum NotificationType {
+  PARCEL_ARRIVED = 'PARCEL_ARRIVED',
+  PARCEL_STORED = 'PARCEL_STORED',
+  DELIVERY_REQUESTED = 'DELIVERY_REQUESTED',
+  OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY',
+  DELIVERED = 'DELIVERED',
+  EXCEPTION_CREATED = 'EXCEPTION_CREATED',
+  EXCEPTION_RESOLVED = 'EXCEPTION_RESOLVED',
+  PAYMENT_CONFIRMED = 'PAYMENT_CONFIRMED',
+}
+
+export const EXCEPTION_TYPE_LABELS: Record<ExceptionType, string> = {
+  [ExceptionType.MISSING_MEMBER_CODE]: 'Missing Member Code',
+  [ExceptionType.INVALID_MEMBER_CODE]: 'Invalid Member Code',
+  [ExceptionType.ILLEGIBLE_LABEL]: 'Illegible Label',
+  [ExceptionType.DAMAGED_PARCEL]: 'Damaged Parcel',
+  [ExceptionType.DUPLICATE_TRACKING]: 'Duplicate Tracking Number',
+  [ExceptionType.CONFLICTING_OWNERSHIP]: 'Conflicting Ownership',
+  [ExceptionType.OTHER]: 'Other',
+};
