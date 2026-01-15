@@ -1,0 +1,423 @@
+// ============================================================
+// PRISMA SCHEMA FOR WAREHOUSE MANAGEMENT SYSTEM
+// ============================================================
+// This schema defines the database structure for a logistics
+// application managing parcel intake, storage, and delivery.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+// User roles for RBAC (Role-Based Access Control)
+// - USER: Regular customer who receives parcels
+// - WAREHOUSE_STAFF: Employee who handles parcel intake/updates
+// - ADMIN: Full system access, resolves exceptions
+enum Role {
+  USER
+  WAREHOUSE_STAFF
+  ADMIN
+}
+
+// Parcel lifecycle states (strict state machine)
+// Transitions: EXPECTED → ARRIVED → STORED → DELIVERY_REQUESTED → OUT_FOR_DELIVERY → DELIVERED
+enum ParcelState {
+  EXPECTED          // Optional: user pre-alerted a parcel is coming
+  ARRIVED           // Parcel received at warehouse
+  STORED            // Parcel processed and stored
+  DELIVERY_REQUESTED // User requested delivery
+  OUT_FOR_DELIVERY  // Parcel dispatched for delivery
+  DELIVERED         // Parcel delivered to user
+}
+
+// Types of exceptions that can occur with parcels
+enum ExceptionType {
+  MISSING_MEMBER_CODE    // No member code on package
+  INVALID_MEMBER_CODE    // Member code doesn't match any user
+  ILLEGIBLE_LABEL        // Label damaged or unreadable
+  DAMAGED_PARCEL         // Package arrived damaged
+  DUPLICATE_TRACKING     // Tracking number already exists
+  CONFLICTING_OWNERSHIP  // Multiple claims to same parcel
+  OTHER                  // Catch-all for other issues
+}
+
+// Exception resolution workflow status
+enum ExceptionStatus {
+  OPEN        // Newly created, awaiting handling
+  IN_PROGRESS // Admin is working on it
+  RESOLVED    // Successfully resolved
+  CANCELLED   // Exception was invalid/cancelled
+}
+
+// Payment status for deliveries
+enum PaymentStatus {
+  PENDING   // Awaiting payment
+  CONFIRMED // Payment received and verified
+  FAILED    // Payment attempt failed
+  REFUNDED  // Payment was refunded
+}
+
+// Types of in-app notifications
+enum NotificationType {
+  PARCEL_ARRIVED      // Your parcel arrived at warehouse
+  PARCEL_STORED       // Your parcel is stored and ready
+  DELIVERY_REQUESTED  // Delivery request confirmed
+  OUT_FOR_DELIVERY    // Your parcel is on the way
+  DELIVERED           // Your parcel was delivered
+  EXCEPTION_CREATED   // There's an issue with your parcel
+  EXCEPTION_RESOLVED  // Issue with your parcel was resolved
+  PAYMENT_CONFIRMED   // Your payment was received
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+// ------------------------------------------------------------
+// USER MODEL
+// ------------------------------------------------------------
+// Represents all users: customers, warehouse staff, and admins.
+// Each user gets a unique member code (PHW-XXXXXX) for parcel identification.
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    // bcrypt hashed password
+  firstName    String
+  lastName     String
+  phone        String?   // Optional phone number
+  memberCode   String    @unique // Format: PHW-XXXXXX, immutable
+  role         Role      @default(USER)
+  isActive     Boolean   @default(true)  // Soft delete flag
+  isDeleted    Boolean   @default(false) // Soft delete flag
+
+  // Delivery address fields (nullable - set when first delivery requested)
+  deliveryStreet   String?
+  deliveryCity     String?
+  deliveryProvince String?
+  deliveryZipCode  String?
+
+  // Single refresh token (single device login) - stored as bcrypt hash
+  refreshTokenHash String?
+
+  // Rate limiting for login attempts (5 attempts per 15 min)
+  failedLoginAttempts Int       @default(0)
+  lastFailedLoginAt   DateTime?
+  lockedUntil         DateTime?
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  // ---- RELATIONS ----
+
+  // Parcels owned by this user (as customer)
+  parcels Parcel[] @relation("ParcelOwner")
+
+  // Deliveries for this user (as recipient)
+  deliveries Delivery[] @relation("DeliveryRecipient")
+
+  // Notifications sent to this user
+  notifications Notification[]
+
+  // Audit logs where this user was the actor
+  auditLogs AuditLog[] @relation("AuditActor")
+
+  // Parcels registered by this user (as staff)
+  registeredParcels Parcel[] @relation("ParcelRegisteredBy")
+
+  // Exceptions handled by this user (as admin)
+  handledExceptions Exception[] @relation("ExceptionHandler")
+
+  // Exceptions created by this user (as staff)
+  createdExceptions Exception[] @relation("ExceptionCreator")
+
+  // ---- INDEXES ----
+  @@index([memberCode]) // Fast lookup by member code
+  @@index([email])      // Fast lookup by email
+  @@index([role])       // Filter by role
+  @@index([isDeleted])  // Filter out deleted users
+}
+
+// ------------------------------------------------------------
+// PARCEL MODEL
+// ------------------------------------------------------------
+// Represents a physical parcel in the warehouse system.
+// Core entity that moves through the state machine lifecycle.
+model Parcel {
+  id             String      @id @default(uuid())
+  trackingNumber String      @unique // External tracking number
+  memberCode     String      // Denormalized for fast lookup at intake
+  description    String?     // Optional description of contents
+  weight         Float       // Weight in kg (required for fee calculation)
+  state          ParcelState @default(ARRIVED)
+  isPreAlerted   Boolean     @default(false) // Was this pre-alerted by user?
+  preAlertedAt   DateTime?   // When user created pre-alert
+  arrivedAt      DateTime    @default(now()) // When parcel arrived
+  storedAt       DateTime?   // When parcel was stored
+  hasException   Boolean     @default(false) // Locks state transitions if true
+  isDeleted      Boolean     @default(false) // Soft delete flag
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ---- RELATIONS ----
+
+  // Owner of this parcel (nullable for orphan parcels)
+  ownerId String?
+  owner   User?   @relation("ParcelOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  // Staff member who registered this parcel
+  registeredById String
+  registeredBy   User   @relation("ParcelRegisteredBy", fields: [registeredById], references: [id], onDelete: Restrict)
+
+  // One-to-one: delivery request for this parcel
+  delivery Delivery?
+
+  // One-to-many: exceptions flagged on this parcel
+  exceptions Exception[]
+
+  // One-to-many: history of state changes
+  stateHistory ParcelStateHistory[]
+
+  // Audit logs related to this parcel
+  auditLogs AuditLog[]
+
+  // ---- INDEXES ----
+  @@index([trackingNumber]) // Fast lookup by tracking number
+  @@index([memberCode])     // Fast lookup by member code
+  @@index([state])          // Filter by current state
+  @@index([ownerId])        // Find parcels by owner
+  @@index([hasException])   // Find parcels with exceptions
+  @@index([isDeleted])      // Filter out deleted parcels
+}
+
+// ------------------------------------------------------------
+// PARCEL STATE HISTORY MODEL
+// ------------------------------------------------------------
+// Immutable audit trail of all state transitions.
+// Every state change creates a new record here.
+model ParcelStateHistory {
+  id          String       @id @default(uuid())
+  parcelId    String
+  parcel      Parcel       @relation(fields: [parcelId], references: [id], onDelete: Cascade)
+  fromState   ParcelState? // Null for initial state
+  toState     ParcelState
+  changedById String       // User ID who made the change
+  notes       String?      // Optional note explaining the change
+  createdAt   DateTime     @default(now())
+
+  // ---- INDEXES ----
+  @@index([parcelId])  // Find history for a parcel
+  @@index([createdAt]) // Sort by time
+}
+
+// ------------------------------------------------------------
+// DELIVERY MODEL
+// ------------------------------------------------------------
+// Represents a delivery request for a parcel.
+// Created when user requests delivery, tracks payment and fulfillment.
+model Delivery {
+  id String @id @default(uuid())
+
+  // One-to-one with Parcel
+  parcelId String @unique
+  parcel   Parcel @relation(fields: [parcelId], references: [id], onDelete: Restrict)
+
+  // Recipient (the user requesting delivery)
+  recipientId String
+  recipient   User   @relation("DeliveryRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+
+  // Delivery address (snapshot at time of request - won't change if user updates profile)
+  deliveryStreet   String
+  deliveryCity     String
+  deliveryProvince String
+  deliveryZipCode  String
+
+  // Fee calculation (snapshot at time of request)
+  weightKg  Float // Weight used for calculation
+  baseFee   Float // Base fee component
+  weightFee Float // Weight-based fee component
+  totalFee  Float // baseFee + weightFee
+
+  // Payment tracking
+  paymentStatus        PaymentStatus @default(PENDING)
+  paymentConfirmedAt   DateTime?
+  paymentConfirmedById String? // Staff who confirmed payment
+
+  // Delivery lifecycle timestamps
+  requestedAt  DateTime  @default(now())
+  dispatchedAt DateTime? // When parcel left warehouse
+  deliveredAt  DateTime? // When parcel was delivered
+
+  // Timestamps
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  auditLogs AuditLog[]
+
+  // ---- INDEXES ----
+  @@index([recipientId])   // Find deliveries by user
+  @@index([paymentStatus]) // Filter by payment status
+}
+
+// ------------------------------------------------------------
+// EXCEPTION MODEL
+// ------------------------------------------------------------
+// Represents a problem with a parcel that requires resolution.
+// Created by staff, resolved by admin.
+model Exception {
+  id String @id @default(uuid())
+
+  // The parcel with the issue
+  parcelId String
+  parcel   Parcel @relation(fields: [parcelId], references: [id], onDelete: Restrict)
+
+  // Exception details
+  type        ExceptionType
+  status      ExceptionStatus @default(OPEN)
+  description String          // Staff description of the issue
+  resolution  String?         // Admin's resolution notes
+  resolvedAt  DateTime?
+
+  // Who created this exception (staff)
+  createdById String
+  createdBy   User   @relation("ExceptionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  // Who is handling/resolved this exception (admin)
+  handledById String?
+  handledBy   User?   @relation("ExceptionHandler", fields: [handledById], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  auditLogs AuditLog[]
+
+  // ---- INDEXES ----
+  @@index([parcelId]) // Find exceptions for a parcel
+  @@index([status])   // Filter by status (open, resolved, etc.)
+  @@index([type])     // Filter by exception type
+}
+
+// ------------------------------------------------------------
+// NOTIFICATION MODEL
+// ------------------------------------------------------------
+// In-app notifications for users.
+// Created automatically on key events (parcel arrived, etc.)
+model Notification {
+  id      String           @id @default(uuid())
+  userId  String
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type    NotificationType
+  title   String           // Short title
+  message String           // Full message
+
+  // Optional links to related entities
+  parcelId   String?
+  deliveryId String?
+
+  // Read status
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  // ---- INDEXES ----
+  @@index([userId])    // Find notifications for a user
+  @@index([isRead])    // Find unread notifications
+  @@index([createdAt]) // Sort by time
+}
+
+// ------------------------------------------------------------
+// AUDIT LOG MODEL
+// ------------------------------------------------------------
+// Immutable record of all important system actions.
+// Used for compliance, debugging, and admin oversight.
+model AuditLog {
+  id String @id @default(uuid())
+
+  // Who performed the action (nullable for system actions)
+  actorId    String?
+  actor      User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole  Role?   // Denormalized for historical record
+  actorEmail String? // Denormalized in case user is deleted
+
+  // What action was performed
+  action     String // e.g., "PARCEL_STATE_CHANGE", "USER_LOGIN"
+  entityType String // e.g., "Parcel", "User", "Delivery"
+  entityId   String // ID of the affected entity
+
+  // State before and after (for tracking changes)
+  previousData Json? // State before the change
+  newData      Json? // State after the change
+  metadata     Json? // Additional context
+
+  // Optional links to related entities
+  parcelId    String?
+  parcel      Parcel?    @relation(fields: [parcelId], references: [id], onDelete: SetNull)
+  deliveryId  String?
+  delivery    Delivery?  @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  exceptionId String?
+  exception   Exception? @relation(fields: [exceptionId], references: [id], onDelete: SetNull)
+
+  // Request context
+  ipAddress String?
+  userAgent String?
+
+  // Immutable timestamp
+  createdAt DateTime @default(now())
+
+  // ---- INDEXES ----
+  @@index([actorId])            // Find logs by actor
+  @@index([entityType, entityId]) // Find logs for an entity
+  @@index([action])             // Filter by action type
+  @@index([createdAt])          // Sort by time
+  @@index([parcelId])           // Find logs for a parcel
+}
+
+// ------------------------------------------------------------
+// FEE CONFIGURATION MODEL
+// ------------------------------------------------------------
+// Configurable fee structure for deliveries.
+// Allows runtime changes to pricing without code deployment.
+model FeeConfiguration {
+  id        String   @id @default(uuid())
+  name      String   @unique // e.g., "standard", "express"
+  baseFee   Float    // Base fee in PHP
+  perKgRate Float    // Rate per kg in PHP
+  minWeight Float    @default(0) // Minimum weight for this tier
+  maxWeight Float?   // Maximum weight (null = no max)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------
+// IDEMPOTENCY KEY MODEL
+// ------------------------------------------------------------
+// Prevents duplicate execution of critical operations.
+// Used for state-changing endpoints (POST, PUT, PATCH).
+// PRD Requirement: "Idempotency for critical actions"
+model IdempotencyKey {
+  id         String   @id // Client-provided idempotency key (UUID recommended)
+  userId     String?  // User who made the request (nullable for unauthenticated)
+  endpoint   String   // Which endpoint was called (e.g., "/api/parcels/state")
+  method     String   // HTTP method (POST, PUT, PATCH)
+  statusCode Int      // HTTP status code of original response
+  response   Json     // Cached response body
+  expiresAt  DateTime // TTL for cleanup (24 hours recommended)
+  createdAt  DateTime @default(now())
+
+  // ---- INDEXES ----
+  @@index([userId])    // Find keys by user
+  @@index([expiresAt]) // For cleanup job
+  @@index([createdAt]) // Sort by time
+}
