@@ -7,6 +7,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { ParcelsModule } from './modules/parcels/parcels.module';
 import { DeliveriesModule } from './modules/deliveries/deliveries.module';
 import { ExceptionsModule } from './modules/exceptions/exceptions.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ExceptionsModule } from './modules/exceptions/exceptions.module';
     ParcelsModule,
     DeliveriesModule,
     ExceptionsModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
