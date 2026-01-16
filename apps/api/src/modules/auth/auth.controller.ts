@@ -6,7 +6,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, RefreshTokenDto } from './dto';
 import { JwtAuthGuard, JwtRefreshGuard } from '../../common/guards';
@@ -32,11 +34,14 @@ export class AuthController {
    * Public endpoint - no authentication required.
    *
    * @param dto - Registration data
+   * @param req - Request object for IP and user agent
    * @returns { user, tokens }
    */
   @Post('register')
-  async register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(@Body() dto: RegisterDto, @Req() req: Request) {
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+    return this.authService.register(dto, ipAddress, userAgent);
   }
 
   /**
@@ -45,12 +50,15 @@ export class AuthController {
    * Public endpoint - no authentication required.
    *
    * @param dto - Login credentials
+   * @param req - Request object for IP and user agent
    * @returns { user, tokens }
    */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Req() req: Request) {
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+    return this.authService.login(dto, ipAddress, userAgent);
   }
 
   /**
@@ -78,12 +86,15 @@ export class AuthController {
    * Requires valid access token.
    *
    * @param userId - Current user's ID
+   * @param req - Request object for IP and user agent
    */
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logout(@CurrentUser('id') userId: string) {
-    await this.authService.logout(userId);
+  async logout(@CurrentUser('id') userId: string, @Req() req: Request) {
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+    await this.authService.logout(userId, ipAddress, userAgent);
     return { message: 'Logged out successfully' };
   }
 

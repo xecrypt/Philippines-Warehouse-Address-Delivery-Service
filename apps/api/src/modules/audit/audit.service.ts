@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -7,14 +6,14 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 export interface AuditLogParams {
   actorId?: string;
-  actorRole?: Role;
+  actorRole?: 'USER' | 'WAREHOUSE_STAFF' | 'ADMIN';
   actorEmail?: string;
   action: string;
   entityType: string;
   entityId: string;
-  previousData?: Record<string, unknown>;
-  newData?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
+  previousData?: object;
+  newData?: object;
+  metadata?: object;
   parcelId?: string;
   deliveryId?: string;
   exceptionId?: string;

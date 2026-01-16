@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy, JwtRefreshStrategy } from './strategies';
+import { AuditModule } from '../audit/audit.module';
 
 /**
  * AuthModule
@@ -17,6 +18,7 @@ import { JwtStrategy, JwtRefreshStrategy } from './strategies';
  * Dependencies:
  * - PassportModule: Authentication middleware
  * - JwtModule: JWT token handling
+ * - AuditModule: Audit logging for auth events
  * - PrismaModule: Database access (global, auto-imported)
  */
 @Module({
@@ -31,6 +33,7 @@ import { JwtStrategy, JwtRefreshStrategy } from './strategies';
         },
       }),
     }),
+    AuditModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, JwtRefreshStrategy],

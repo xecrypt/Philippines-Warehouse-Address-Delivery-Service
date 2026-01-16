@@ -273,7 +273,7 @@ export class UsersService {
       data: {
         isDeleted: true,
         isActive: false,
-        refreshToken: null, // Invalidate any active sessions
+        refreshTokenHash: null, // Invalidate any active sessions
       },
     });
 
