@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService, AuditActions } from '../audit/audit.service';
 import { UpdateDeliveryAddressDto, UpdateUserRoleDto } from './dto';
 
 /**
@@ -17,7 +18,10 @@ import { UpdateDeliveryAddressDto, UpdateUserRoleDto } from './dto';
  */
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditService,
+  ) {}
 
   /**
    * Find user by ID.
@@ -171,12 +175,16 @@ export class UsersService {
    * @param targetUserId - User to update
    * @param dto - New role
    * @param adminUserId - Admin making the change
+   * @param ipAddress - Request IP for audit
+   * @param userAgent - Request user agent for audit
    * @returns Updated user
    */
   async updateUserRole(
     targetUserId: string,
     dto: UpdateUserRoleDto,
     adminUserId: string,
+    ipAddress?: string,
+    userAgent?: string,
   ) {
     // Prevent admin from changing their own role
     if (targetUserId === adminUserId) {
@@ -191,7 +199,15 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    return this.prisma.user.update({
+    // Get admin info for audit
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminUserId },
+      select: { email: true, role: true },
+    });
+
+    const previousRole = user.role;
+
+    const updated = await this.prisma.user.update({
       where: { id: targetUserId },
       data: { role: dto.role },
       select: {
@@ -203,6 +219,22 @@ export class UsersService {
         role: true,
       },
     });
+
+    // Audit log
+    await this.auditService.log({
+      actorId: adminUserId,
+      actorEmail: admin?.email,
+      actorRole: admin?.role,
+      action: AuditActions.USER_ROLE_CHANGED,
+      entityType: 'User',
+      entityId: targetUserId,
+      previousData: { role: previousRole },
+      newData: { role: dto.role },
+      ipAddress,
+      userAgent,
+    });
+
+    return updated;
   }
 
   /**
@@ -212,12 +244,16 @@ export class UsersService {
    * @param targetUserId - User to update
    * @param isActive - New active status
    * @param adminUserId - Admin making the change
+   * @param ipAddress - Request IP for audit
+   * @param userAgent - Request user agent for audit
    * @returns Updated user
    */
   async setUserActiveStatus(
     targetUserId: string,
     isActive: boolean,
     adminUserId: string,
+    ipAddress?: string,
+    userAgent?: string,
   ) {
     // Prevent admin from deactivating themselves
     if (targetUserId === adminUserId && !isActive) {
@@ -232,7 +268,15 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    return this.prisma.user.update({
+    // Get admin info for audit
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminUserId },
+      select: { email: true, role: true },
+    });
+
+    const previousStatus = user.isActive;
+
+    const updated = await this.prisma.user.update({
       where: { id: targetUserId },
       data: { isActive },
       select: {
@@ -245,6 +289,22 @@ export class UsersService {
         isActive: true,
       },
     });
+
+    // Audit log
+    await this.auditService.log({
+      actorId: adminUserId,
+      actorEmail: admin?.email,
+      actorRole: admin?.role,
+      action: isActive ? AuditActions.USER_ACTIVATED : AuditActions.USER_DEACTIVATED,
+      entityType: 'User',
+      entityId: targetUserId,
+      previousData: { isActive: previousStatus },
+      newData: { isActive },
+      ipAddress,
+      userAgent,
+    });
+
+    return updated;
   }
 
   /**
@@ -253,8 +313,15 @@ export class UsersService {
    *
    * @param targetUserId - User to delete
    * @param adminUserId - Admin making the change
+   * @param ipAddress - Request IP for audit
+   * @param userAgent - Request user agent for audit
    */
-  async softDeleteUser(targetUserId: string, adminUserId: string) {
+  async softDeleteUser(
+    targetUserId: string,
+    adminUserId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     // Prevent admin from deleting themselves
     if (targetUserId === adminUserId) {
       throw new ForbiddenException('Cannot delete your own account');
@@ -268,6 +335,12 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    // Get admin info for audit
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminUserId },
+      select: { email: true, role: true },
+    });
+
     await this.prisma.user.update({
       where: { id: targetUserId },
       data: {
@@ -275,6 +348,20 @@ export class UsersService {
         isActive: false,
         refreshTokenHash: null, // Invalidate any active sessions
       },
+    });
+
+    // Audit log
+    await this.auditService.log({
+      actorId: adminUserId,
+      actorEmail: admin?.email,
+      actorRole: admin?.role,
+      action: AuditActions.USER_DELETED,
+      entityType: 'User',
+      entityId: targetUserId,
+      previousData: { email: user.email, role: user.role, isActive: user.isActive },
+      newData: { isDeleted: true, isActive: false },
+      ipAddress,
+      userAgent,
     });
 
     return { message: 'User deleted successfully' };

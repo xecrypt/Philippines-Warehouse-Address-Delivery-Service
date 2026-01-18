@@ -7,6 +7,7 @@ import {
 import { ParcelState, PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService, AuditActions } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RequestDeliveryDto } from './dto';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class DeliveriesService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -182,6 +184,14 @@ export class DeliveriesService {
       userAgent,
     });
 
+    // Notify user of delivery request
+    await this.notificationsService.notifyDeliveryRequested(
+      userId,
+      dto.parcelId,
+      result.delivery.id,
+      parcel.trackingNumber,
+    );
+
     return result;
   }
 
@@ -247,6 +257,14 @@ export class DeliveriesService {
       ipAddress,
       userAgent,
     });
+
+    // Notify recipient of payment confirmation
+    await this.notificationsService.notifyPaymentConfirmed(
+      delivery.recipientId,
+      delivery.parcelId,
+      deliveryId,
+      delivery.parcel.trackingNumber,
+    );
 
     return updatedDelivery;
   }
@@ -335,6 +353,14 @@ export class DeliveriesService {
       userAgent,
     });
 
+    // Notify recipient that parcel is out for delivery
+    await this.notificationsService.notifyOutForDelivery(
+      delivery.recipientId,
+      delivery.parcelId,
+      deliveryId,
+      delivery.parcel.trackingNumber,
+    );
+
     return result;
   }
 
@@ -414,6 +440,14 @@ export class DeliveriesService {
       ipAddress,
       userAgent,
     });
+
+    // Notify recipient that parcel has been delivered
+    await this.notificationsService.notifyDelivered(
+      delivery.recipientId,
+      delivery.parcelId,
+      deliveryId,
+      delivery.parcel.trackingNumber,
+    );
 
     return result;
   }

@@ -7,6 +7,7 @@ import {
 import { ExceptionStatus, ExceptionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService, AuditActions } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateExceptionDto, ResolveExceptionDto } from './dto';
 
 /**
@@ -25,6 +26,7 @@ export class ExceptionsService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -113,6 +115,16 @@ export class ExceptionsService {
       userAgent,
     });
 
+    // Notify parcel owner if exists
+    if (parcel.ownerId) {
+      await this.notificationsService.notifyExceptionCreated(
+        parcel.ownerId,
+        parcel.id,
+        parcel.trackingNumber,
+        dto.type,
+      );
+    }
+
     return result;
   }
 
@@ -200,6 +212,11 @@ export class ExceptionsService {
   ) {
     const exception = await this.prisma.exception.findUnique({
       where: { id: exceptionId },
+      include: {
+        parcel: {
+          select: { id: true, ownerId: true, trackingNumber: true },
+        },
+      },
     });
 
     if (!exception) {
@@ -271,6 +288,15 @@ export class ExceptionsService {
       ipAddress,
       userAgent,
     });
+
+    // Notify parcel owner if exists
+    if (exception.parcel.ownerId) {
+      await this.notificationsService.notifyExceptionResolved(
+        exception.parcel.ownerId,
+        exception.parcel.id,
+        exception.parcel.trackingNumber,
+      );
+    }
 
     return result.exception;
   }

@@ -4,9 +4,10 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { ParcelState, Role, ExceptionType } from '@prisma/client';
+import { ParcelState, ExceptionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService, AuditActions } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { IntakeParcelDto, UpdateParcelStateDto } from './dto';
 
 /**
@@ -27,6 +28,7 @@ export class ParcelsService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -101,15 +103,18 @@ export class ParcelsService {
       // If orphan, create exception
       let exception = null;
       if (isOrphan) {
-        const exceptionType = !owner
-          ? ExceptionType.INVALID_MEMBER_CODE
-          : ExceptionType.INVALID_MEMBER_CODE;
+        // Determine specific reason for exception description
+        const reason = !owner
+          ? 'does not match any registered user'
+          : owner.isDeleted
+            ? 'belongs to a deleted user'
+            : 'belongs to an inactive user';
 
         exception = await tx.exception.create({
           data: {
             parcelId: parcel.id,
-            type: exceptionType,
-            description: `Member code ${dto.memberCode} not found or user inactive`,
+            type: ExceptionType.INVALID_MEMBER_CODE,
+            description: `Member code ${dto.memberCode} ${reason}`,
             createdById: staffId,
           },
         });
@@ -137,6 +142,15 @@ export class ParcelsService {
       ipAddress,
       userAgent,
     });
+
+    // Notify owner if parcel has owner (not orphan)
+    if (result.parcel.ownerId) {
+      await this.notificationsService.notifyParcelArrived(
+        result.parcel.ownerId,
+        result.parcel.id,
+        dto.trackingNumber,
+      );
+    }
 
     return result;
   }
@@ -231,6 +245,17 @@ export class ParcelsService {
       ipAddress,
       userAgent,
     });
+
+    // Notify owner on state changes
+    if (updatedParcel.ownerId) {
+      if (dto.newState === ParcelState.STORED) {
+        await this.notificationsService.notifyParcelStored(
+          updatedParcel.ownerId,
+          parcelId,
+          updatedParcel.trackingNumber,
+        );
+      }
+    }
 
     return updatedParcel;
   }
@@ -499,5 +524,118 @@ export class ParcelsService {
     });
 
     return deleted;
+  }
+
+  /**
+   * Override parcel ownership (admin only).
+   *
+   * PRD Section 12: "Ownership changes require admin override"
+   * This allows admin to reassign a parcel to a different owner,
+   * typically used to resolve orphan parcels or correct intake errors.
+   *
+   * @param parcelId - Parcel ID
+   * @param newOwnerMemberCode - New owner's member code (required)
+   * @param adminId - Admin user ID performing the override
+   * @param reason - Reason for the ownership change (required for audit)
+   * @param ipAddress - Request IP for audit
+   * @param userAgent - Request user agent for audit
+   */
+  async overrideOwnership(
+    parcelId: string,
+    newOwnerMemberCode: string,
+    adminId: string,
+    reason: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    // Validate parcel exists
+    const parcel = await this.prisma.parcel.findUnique({
+      where: { id: parcelId },
+      include: {
+        owner: {
+          select: { id: true, email: true, memberCode: true },
+        },
+      },
+    });
+
+    if (!parcel || parcel.isDeleted) {
+      throw new NotFoundException('Parcel not found');
+    }
+
+    // Look up new owner by member code
+    const newOwner = await this.prisma.user.findUnique({
+      where: { memberCode: newOwnerMemberCode },
+      select: { id: true, email: true, memberCode: true, isActive: true, isDeleted: true },
+    });
+
+    // If member code matches but user is inactive/deleted, reject
+    if (newOwner && (newOwner.isDeleted || !newOwner.isActive)) {
+      throw new BadRequestException('Cannot assign parcel to inactive or deleted user');
+    }
+
+    // Get admin info for audit
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminId },
+      select: { email: true, role: true },
+    });
+
+    const previousOwnerId = parcel.ownerId;
+    const previousMemberCode = parcel.memberCode;
+
+    // Update parcel ownership
+    // If newOwner is null, parcel becomes orphan (memberCode updated but no owner)
+    const updated = await this.prisma.parcel.update({
+      where: { id: parcelId },
+      data: {
+        ownerId: newOwner?.id || null,
+        memberCode: newOwnerMemberCode,
+      },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            memberCode: true,
+          },
+        },
+      },
+    });
+
+    // Audit log: Admin override - ownership change
+    await this.auditService.log({
+      actorId: adminId,
+      actorEmail: admin?.email,
+      actorRole: admin?.role,
+      action: AuditActions.PARCEL_OWNER_ASSIGNED,
+      entityType: 'Parcel',
+      entityId: parcelId,
+      previousData: {
+        ownerId: previousOwnerId,
+        memberCode: previousMemberCode,
+        ownerEmail: parcel.owner?.email,
+      },
+      newData: {
+        ownerId: newOwner?.id || null,
+        memberCode: newOwnerMemberCode,
+        ownerEmail: newOwner?.email || null,
+        reason,
+      },
+      parcelId,
+      ipAddress,
+      userAgent,
+    });
+
+    // Notify new owner if assigned
+    if (newOwner) {
+      await this.notificationsService.notifyParcelArrived(
+        newOwner.id,
+        parcelId,
+        parcel.trackingNumber,
+      );
+    }
+
+    return updated;
   }
 }

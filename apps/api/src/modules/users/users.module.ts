@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { AuditModule } from '../audit/audit.module';
 
 /**
  * UsersModule
@@ -11,6 +12,7 @@ import { UsersService } from './users.service';
  * - Member code lookup for staff
  */
 @Module({
+  imports: [AuditModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],

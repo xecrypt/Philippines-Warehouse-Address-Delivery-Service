@@ -7,8 +7,10 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
   Req,
   ParseUUIDPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { PaymentStatus, Role } from '@prisma/client';
@@ -16,6 +18,7 @@ import { DeliveriesService } from './deliveries.service';
 import { RequestDeliveryDto } from './dto';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
+import { IdempotencyInterceptor } from '../../common/interceptors';
 
 @Controller('deliveries')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,8 +30,10 @@ export class DeliveriesController {
    * POST /api/deliveries
    *
    * User only (for their own parcels).
+   * Supports idempotency via Idempotency-Key header.
    */
   @Post()
+  @UseInterceptors(IdempotencyInterceptor)
   async requestDelivery(
     @Body() dto: RequestDeliveryDto,
     @CurrentUser('id') userId: string,
@@ -108,7 +113,7 @@ export class DeliveriesController {
 
     // Users can only view their own deliveries
     if (user.role === Role.USER && delivery.recipientId !== user.id) {
-      throw new Error('You can only view your own deliveries');
+      throw new ForbiddenException('You can only view your own deliveries');
     }
 
     return delivery;
@@ -119,9 +124,11 @@ export class DeliveriesController {
    * PATCH /api/deliveries/:id/confirm-payment
    *
    * Staff/Admin only.
+   * Supports idempotency via Idempotency-Key header.
    */
   @Patch(':id/confirm-payment')
   @Roles(Role.WAREHOUSE_STAFF, Role.ADMIN)
+  @UseInterceptors(IdempotencyInterceptor)
   async confirmPayment(
     @Param('id', ParseUUIDPipe) deliveryId: string,
     @CurrentUser('id') staffId: string,

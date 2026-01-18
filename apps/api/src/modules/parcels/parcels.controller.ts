@@ -10,11 +10,12 @@ import {
   UseGuards,
   Req,
   ParseUUIDPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ParcelState, Role } from '@prisma/client';
 import { ParcelsService } from './parcels.service';
-import { IntakeParcelDto, UpdateParcelStateDto } from './dto';
+import { IntakeParcelDto, UpdateParcelStateDto, OverrideOwnershipDto } from './dto';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
 import { Roles, CurrentUser } from '../../common/decorators';
 
@@ -82,7 +83,7 @@ export class ParcelsController {
 
     // Users can only view their own parcels
     if (user.role === Role.USER && parcel.ownerId !== user.id) {
-      throw new Error('You can only view your own parcels');
+      throw new ForbiddenException('You can only view your own parcels');
     }
 
     return parcel;
@@ -166,11 +167,38 @@ export class ParcelsController {
     if (user.role === Role.USER) {
       const parcel = await this.parcelsService.findById(parcelId);
       if (parcel.ownerId !== user.id) {
-        throw new Error('You can only view history of your own parcels');
+        throw new ForbiddenException('You can only view history of your own parcels');
       }
     }
 
     return this.parcelsService.getStateHistory(parcelId);
+  }
+
+  /**
+   * Override parcel ownership.
+   * PATCH /api/parcels/:id/override-ownership
+   *
+   * Admin only.
+   * PRD Section 12: "Ownership changes require admin override"
+   */
+  @Patch(':id/override-ownership')
+  @Roles(Role.ADMIN)
+  async overrideOwnership(
+    @Param('id', ParseUUIDPipe) parcelId: string,
+    @Body() dto: OverrideOwnershipDto,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
+    const ipAddress = req.ip;
+    const userAgent = req.headers['user-agent'];
+    return this.parcelsService.overrideOwnership(
+      parcelId,
+      dto.memberCode,
+      adminId,
+      dto.reason,
+      ipAddress,
+      userAgent,
+    );
   }
 
   /**

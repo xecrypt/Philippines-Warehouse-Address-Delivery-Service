@@ -145,11 +145,32 @@ export class AuthService {
     });
 
     if (!user) {
+      // Audit log: Failed login - user not found (log with email only)
+      await this.auditService.log({
+        action: AuditActions.FAILED_LOGIN_INVALID_CREDENTIALS,
+        entityType: 'User',
+        entityId: 'unknown',
+        newData: { attemptedEmail: dto.email.toLowerCase() },
+        ipAddress,
+        userAgent,
+      });
       throw new UnauthorizedException('Invalid email or password');
     }
 
     // Check if user is active
     if (!user.isActive || user.isDeleted) {
+      // Audit log: Failed login - account inactive
+      await this.auditService.log({
+        actorId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
+        action: AuditActions.FAILED_LOGIN_ACCOUNT_INACTIVE,
+        entityType: 'User',
+        entityId: user.id,
+        newData: { isActive: user.isActive, isDeleted: user.isDeleted },
+        ipAddress,
+        userAgent,
+      });
       throw new UnauthorizedException('Account is inactive or deleted');
     }
 
@@ -158,6 +179,18 @@ export class AuthService {
       const remainingMinutes = Math.ceil(
         (user.lockedUntil.getTime() - Date.now()) / 60000,
       );
+      // Audit log: Failed login - account locked
+      await this.auditService.log({
+        actorId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
+        action: AuditActions.FAILED_LOGIN_ACCOUNT_LOCKED,
+        entityType: 'User',
+        entityId: user.id,
+        newData: { lockedUntil: user.lockedUntil, remainingMinutes },
+        ipAddress,
+        userAgent,
+      });
       throw new ForbiddenException(
         `Account temporarily locked. Try again in ${remainingMinutes} minute(s).`,
       );
@@ -167,8 +200,8 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
 
     if (!isPasswordValid) {
-      // Record failed login attempt
-      await this.recordFailedLoginAttempt(user.id);
+      // Record failed login attempt and audit log
+      await this.recordFailedLoginAttempt(user.id, user.email, user.role, ipAddress, userAgent);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -338,9 +371,15 @@ export class AuthService {
   // ============================================================
 
   /**
-   * Record a failed login attempt and lock account if threshold reached.
+   * Record a failed login attempt, lock account if threshold reached, and audit log.
    */
-  private async recordFailedLoginAttempt(userId: string) {
+  private async recordFailedLoginAttempt(
+    userId: string,
+    email: string,
+    role: Role,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { failedLoginAttempts: true, lastFailedLoginAt: true },
@@ -372,6 +411,23 @@ export class AuthService {
         lastFailedLoginAt: now,
         lockedUntil,
       },
+    });
+
+    // Audit log: Failed login - invalid credentials
+    await this.auditService.log({
+      actorId: userId,
+      actorEmail: email,
+      actorRole: role,
+      action: AuditActions.FAILED_LOGIN_INVALID_CREDENTIALS,
+      entityType: 'User',
+      entityId: userId,
+      newData: {
+        failedAttempts: newFailedAttempts,
+        accountLocked: !!lockedUntil,
+        lockedUntil,
+      },
+      ipAddress,
+      userAgent,
     });
   }
 

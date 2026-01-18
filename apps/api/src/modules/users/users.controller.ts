@@ -6,12 +6,14 @@ import {
   Param,
   Body,
   Query,
+  Req,
   UseGuards,
   ParseUUIDPipe,
   ParseIntPipe,
   DefaultValuePipe,
   ParseBoolPipe,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { Role } from '@prisma/client';
 import { UsersService } from './users.service';
 import { UpdateDeliveryAddressDto, UpdateUserRoleDto } from './dto';
@@ -118,8 +120,15 @@ export class UsersController {
     @Param('id', ParseUUIDPipe) targetUserId: string,
     @Body() dto: UpdateUserRoleDto,
     @CurrentUser('id') adminUserId: string,
+    @Req() req: Request,
   ) {
-    return this.usersService.updateUserRole(targetUserId, dto, adminUserId);
+    return this.usersService.updateUserRole(
+      targetUserId,
+      dto,
+      adminUserId,
+      req.ip,
+      req.get('user-agent'),
+    );
   }
 
   /**
@@ -133,11 +142,14 @@ export class UsersController {
     @Param('id', ParseUUIDPipe) targetUserId: string,
     @Query('active', ParseBoolPipe) isActive: boolean,
     @CurrentUser('id') adminUserId: string,
+    @Req() req: Request,
   ) {
     return this.usersService.setUserActiveStatus(
       targetUserId,
       isActive,
       adminUserId,
+      req.ip,
+      req.get('user-agent'),
     );
   }
 
@@ -151,7 +163,13 @@ export class UsersController {
   async deleteUser(
     @Param('id', ParseUUIDPipe) targetUserId: string,
     @CurrentUser('id') adminUserId: string,
+    @Req() req: Request,
   ) {
-    return this.usersService.softDeleteUser(targetUserId, adminUserId);
+    return this.usersService.softDeleteUser(
+      targetUserId,
+      adminUserId,
+      req.ip,
+      req.get('user-agent'),
+    );
   }
 }
