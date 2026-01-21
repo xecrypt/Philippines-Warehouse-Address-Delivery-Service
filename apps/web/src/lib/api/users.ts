@@ -15,8 +15,13 @@ export async function updateMyAddress(data: UpdateAddressData): Promise<ApiRespo
   });
 }
 
-export async function findByMemberCode(code: string): Promise<ApiResponse<User>> {
-  return apiClient<ApiResponse<User>>(`/users/by-member-code/${encodeURIComponent(code)}`);
+export interface MemberLookupResponse {
+  found: boolean;
+  user: User | null;
+}
+
+export async function findByMemberCode(code: string): Promise<ApiResponse<MemberLookupResponse>> {
+  return apiClient<ApiResponse<MemberLookupResponse>>(`/users/by-member-code/${encodeURIComponent(code)}`);
 }
 
 export async function getAllUsers(params?: {

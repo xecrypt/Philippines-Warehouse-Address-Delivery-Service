@@ -2,7 +2,6 @@ import type {
   ApiResponse,
   PaginatedResponse,
   Delivery,
-  FeeBreakdown,
   PaymentStatus,
 } from '@warehouse/shared';
 import { apiClient, generateIdempotencyKey } from './client';
@@ -18,8 +17,17 @@ export interface RequestDeliveryData {
   idempotencyKey?: string;
 }
 
-export async function getEstimate(parcelId: string): Promise<ApiResponse<{ totalFee: number; breakdown: FeeBreakdown }>> {
-  return apiClient<ApiResponse<{ totalFee: number; breakdown: FeeBreakdown }>>(`/deliveries/estimate/${parcelId}`);
+export interface FeeEstimate {
+  parcelId: string;
+  weight: number;
+  roundedWeight: number;
+  baseFee: number;
+  weightFee: number;
+  totalFee: number;
+}
+
+export async function getEstimate(parcelId: string): Promise<ApiResponse<FeeEstimate>> {
+  return apiClient<ApiResponse<FeeEstimate>>(`/deliveries/estimate/${parcelId}`);
 }
 
 export async function requestDelivery(data: RequestDeliveryData): Promise<ApiResponse<Delivery>> {
@@ -32,7 +40,10 @@ export async function requestDelivery(data: RequestDeliveryData): Promise<ApiRes
     method: 'POST',
     body: JSON.stringify({
       parcelId: data.parcelId,
-      ...data.deliveryAddress,
+      deliveryStreet: data.deliveryAddress.street,
+      deliveryCity: data.deliveryAddress.city,
+      deliveryProvince: data.deliveryAddress.province,
+      deliveryZipCode: data.deliveryAddress.zipCode,
     }),
     headers,
   });

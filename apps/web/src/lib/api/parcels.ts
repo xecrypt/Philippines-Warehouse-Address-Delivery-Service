@@ -16,7 +16,7 @@ export interface IntakeParcelData {
 }
 
 export interface UpdateStateData {
-  state: ParcelState;
+  newState: ParcelState;
   notes?: string;
 }
 

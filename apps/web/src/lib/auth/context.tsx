@@ -31,11 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const response = await authApi.getProfile();
-      // API returns data directly, not wrapped in {success, data}
-      if (response && (response as any).id) {
-        setUser(response as unknown as UserProfile);
-      } else if ((response as any).success && (response as any).data) {
-        setUser((response as any).data);
+      if (response.success && response.data) {
+        setUser(response.data);
       } else {
         clearTokens();
         setUser(null);
@@ -54,25 +51,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (data: LoginRequest) => {
     const response = await authApi.login(data);
-    // API returns {user, tokens} directly, not wrapped in {success, data}
-    const authData = (response as any).tokens ? response : (response as any).data;
-    if (authData && authData.tokens) {
-      setTokens(authData.tokens.accessToken, authData.tokens.refreshToken);
+    if (response.success && response.data) {
+      setTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
       await fetchProfile();
     } else {
-      throw new Error((response as any).message || 'Login failed');
+      throw new Error(response.message || 'Login failed');
     }
   };
 
   const register = async (data: RegisterRequest) => {
     const response = await authApi.register(data);
-    // API returns {user, tokens} directly, not wrapped in {success, data}
-    const authData = (response as any).tokens ? response : (response as any).data;
-    if (authData && authData.tokens) {
-      setTokens(authData.tokens.accessToken, authData.tokens.refreshToken);
+    if (response.success && response.data) {
+      setTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
       await fetchProfile();
     } else {
-      throw new Error((response as any).message || 'Registration failed');
+      throw new Error(response.message || 'Registration failed');
     }
   };
 
