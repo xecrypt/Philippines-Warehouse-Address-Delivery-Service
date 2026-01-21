@@ -62,14 +62,14 @@ export default function DeliveriesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">My Deliveries</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl font-bold lg:text-2xl">My Deliveries</h1>
+          <p className="text-sm text-muted-foreground lg:text-base">
             Track and manage your delivery requests
           </p>
         </div>
-        <Button onClick={() => setShowRequestDialog(true)}>
+        <Button onClick={() => setShowRequestDialog(true)} className="w-full sm:w-auto">
           <Truck className="mr-2 h-4 w-4" />
           Request Delivery
         </Button>
@@ -123,10 +123,10 @@ export default function DeliveriesPage() {
                         Delivery Address
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {delivery.deliveryAddress.street}
+                        {delivery.deliveryStreet}
                         <br />
-                        {delivery.deliveryAddress.city}, {delivery.deliveryAddress.province}{' '}
-                        {delivery.deliveryAddress.zipCode}
+                        {delivery.deliveryCity}, {delivery.deliveryProvince}{' '}
+                        {delivery.deliveryZipCode}
                       </p>
                     </div>
 
@@ -135,15 +135,15 @@ export default function DeliveriesPage() {
                       <div className="mt-1 space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Base Fee</span>
-                          <span>${delivery.feeBreakdown.baseFee.toFixed(2)}</span>
+                          <span>₱{delivery.baseFee.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Weight Fee</span>
-                          <span>${delivery.feeBreakdown.weightFee.toFixed(2)}</span>
+                          <span>₱{delivery.weightFee.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between border-t pt-1 font-medium">
                           <span>Total</span>
-                          <span>${delivery.totalFee.toFixed(2)}</span>
+                          <span>₱{delivery.totalFee.toFixed(2)}</span>
                         </div>
                       </div>
                     </div>

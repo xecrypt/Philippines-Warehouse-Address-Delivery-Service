@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ParcelState } from '@warehouse/shared';
 import * as parcelsApi from '@/lib/api/parcels';
 import * as deliveriesApi from '@/lib/api/deliveries';
+import type { FeeEstimate } from '@/lib/api/deliveries';
 import { generateIdempotencyKey } from '@/lib/api/client';
 import { deliveryAddressSchema, type DeliveryAddressFormData } from '@/lib/utils/validation';
 import {
@@ -19,7 +20,7 @@ import {
   Input,
   Label,
 } from '@/components/ui';
-import type { ParcelWithOwner, FeeBreakdown } from '@warehouse/shared';
+import type { ParcelWithOwner } from '@warehouse/shared';
 
 interface RequestDeliveryDialogProps {
   open: boolean;
@@ -39,7 +40,7 @@ export function RequestDeliveryDialog({
   const [step, setStep] = useState<Step>('select');
   const [parcels, setParcels] = useState<ParcelWithOwner[]>([]);
   const [selectedParcel, setSelectedParcel] = useState<ParcelWithOwner | null>(null);
-  const [feeEstimate, setFeeEstimate] = useState<{ totalFee: number; breakdown: FeeBreakdown } | null>(null);
+  const [feeEstimate, setFeeEstimate] = useState<FeeEstimate | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,15 +253,15 @@ export function RequestDeliveryDialog({
                 <div className="mt-2 space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Base Fee</span>
-                    <span>${feeEstimate.breakdown.baseFee.toFixed(2)}</span>
+                    <span>₱{feeEstimate.baseFee.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Weight Fee</span>
-                    <span>${feeEstimate.breakdown.weightFee.toFixed(2)}</span>
+                    <span>₱{feeEstimate.weightFee.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between border-t pt-1 font-medium">
                     <span>Total</span>
-                    <span>${feeEstimate.totalFee.toFixed(2)}</span>
+                    <span>₱{feeEstimate.totalFee.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
