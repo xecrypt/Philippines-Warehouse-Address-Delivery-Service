@@ -502,21 +502,34 @@ export class DeliveriesService {
       where.paymentStatus = status;
     }
 
-    return this.prisma.delivery.findMany({
-      where,
-      include: {
-        parcel: {
-          select: {
-            id: true,
-            trackingNumber: true,
-            state: true,
-            weight: true,
-            description: true,
+    const [deliveries, total] = await Promise.all([
+      this.prisma.delivery.findMany({
+        where,
+        include: {
+          parcel: {
+            select: {
+              id: true,
+              trackingNumber: true,
+              state: true,
+              weight: true,
+              description: true,
+            },
           },
         },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.delivery.count({ where }),
+    ]);
+
+    return {
+      data: deliveries,
+      meta: {
+        total,
+        page: 1,
+        limit: total,
+        totalPages: 1,
       },
-      orderBy: { createdAt: 'desc' },
-    });
+    };
   }
 
   /**

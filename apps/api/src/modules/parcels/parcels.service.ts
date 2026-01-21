@@ -376,17 +376,30 @@ export class ParcelsService {
       where.state = state;
     }
 
-    return this.prisma.parcel.findMany({
-      where,
-      include: {
-        delivery: true,
-        stateHistory: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+    const [parcels, total] = await Promise.all([
+      this.prisma.parcel.findMany({
+        where,
+        include: {
+          delivery: true,
+          stateHistory: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
         },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.parcel.count({ where }),
+    ]);
+
+    return {
+      data: parcels,
+      meta: {
+        total,
+        page: 1,
+        limit: total,
+        totalPages: 1,
       },
-      orderBy: { createdAt: 'desc' },
-    });
+    };
   }
 
   /**
