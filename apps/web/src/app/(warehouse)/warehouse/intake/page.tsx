@@ -30,7 +30,7 @@ export default function ParcelIntakePage() {
     message: string;
   } | null>(null);
 
-  const trackingInputRef = useRef<HTMLInputElement>(null);
+  const trackingInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     register,
@@ -64,8 +64,8 @@ export default function ParcelIntakePage() {
       setMemberLookup({ status: 'loading', user: null });
       try {
         const response = await usersApi.findByMemberCode(memberCode);
-        if (response.success && response.data) {
-          setMemberLookup({ status: 'found', user: response.data });
+        if (response.success && response.data?.found && response.data.user) {
+          setMemberLookup({ status: 'found', user: response.data.user });
         } else {
           setMemberLookup({ status: 'not_found', user: null });
         }
@@ -124,8 +124,8 @@ export default function ParcelIntakePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Parcel Intake</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl font-bold lg:text-2xl">Parcel Intake</h1>
+        <p className="text-sm text-muted-foreground lg:text-base">
           Register new parcels arriving at the warehouse
         </p>
       </div>
@@ -172,7 +172,7 @@ export default function ParcelIntakePage() {
                   {...register('trackingNumber')}
                   ref={(e) => {
                     register('trackingNumber').ref(e);
-                    (trackingInputRef as any).current = e;
+                    trackingInputRef.current = e;
                   }}
                 />
                 {errors.trackingNumber && (

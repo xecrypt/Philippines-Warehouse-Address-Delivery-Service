@@ -99,13 +99,23 @@ export default function WarehouseParcelsPage() {
   };
 
   const getValidTransitions = (state: ParcelState): ParcelState[] => {
-    return PARCEL_STATE_TRANSITIONS[state] || [];
+    const transitions = PARCEL_STATE_TRANSITIONS[state] || [];
+    // Filter out transitions that are handled through other workflows
+    // DELIVERY_REQUESTED is set when user requests delivery, not by staff
+    // OUT_FOR_DELIVERY is set via Dispatch button
+    // DELIVERED is set via Complete button
+    return transitions.filter(
+      (t) =>
+        t !== ParcelState.DELIVERY_REQUESTED &&
+        t !== ParcelState.OUT_FOR_DELIVERY &&
+        t !== ParcelState.DELIVERED
+    );
   };
 
   const handleStateUpdate = async (parcelId: string, newState: ParcelState) => {
     setActionLoading(parcelId);
     try {
-      const response = await parcelsApi.updateParcelState(parcelId, { state: newState });
+      const response = await parcelsApi.updateParcelState(parcelId, { newState });
       if (response.success) {
         fetchParcels();
       }
@@ -179,8 +189,8 @@ export default function WarehouseParcelsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Parcel Management</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl font-bold lg:text-2xl">Parcel Management</h1>
+        <p className="text-sm text-muted-foreground lg:text-base">
           View and manage all parcels in the warehouse
         </p>
       </div>
@@ -246,7 +256,8 @@ export default function WarehouseParcelsPage() {
               <p className="mt-4 text-muted-foreground">No parcels found</p>
             </div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
+            <Table className="min-w-[900px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Tracking #</TableHead>
@@ -374,6 +385,7 @@ export default function WarehouseParcelsPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
