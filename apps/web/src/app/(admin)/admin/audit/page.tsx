@@ -80,8 +80,8 @@ export default function AdminAuditPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Audit Logs</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl font-bold lg:text-2xl">Audit Logs</h1>
+        <p className="text-sm text-muted-foreground lg:text-base">
           View system activity and changes
         </p>
       </div>
@@ -146,7 +146,8 @@ export default function AdminAuditPage() {
             </div>
           ) : (
             <>
-              <Table>
+              <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[40px]"></TableHead>
@@ -237,6 +238,7 @@ export default function AdminAuditPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
               {/* Pagination */}
               {totalPages > 1 && (

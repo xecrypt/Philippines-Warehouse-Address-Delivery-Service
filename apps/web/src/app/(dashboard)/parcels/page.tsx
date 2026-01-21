@@ -61,13 +61,11 @@ export default function ParcelsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">My Parcels</h1>
-          <p className="text-muted-foreground">
-            Track and manage all your parcels
-          </p>
-        </div>
+      <div>
+        <h1 className="text-xl font-bold lg:text-2xl">My Parcels</h1>
+        <p className="text-sm text-muted-foreground lg:text-base">
+          Track and manage all your parcels
+        </p>
       </div>
 
       {/* Filter */}

@@ -70,8 +70,8 @@ export default function WarehouseDashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Warehouse Dashboard</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl font-bold lg:text-2xl">Warehouse Dashboard</h1>
+        <p className="text-sm text-muted-foreground lg:text-base">
           Manage parcels, deliveries, and exceptions
         </p>
       </div>

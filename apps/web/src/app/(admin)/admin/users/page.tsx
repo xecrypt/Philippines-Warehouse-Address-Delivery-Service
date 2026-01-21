@@ -133,8 +133,8 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">User Management</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl font-bold lg:text-2xl">User Management</h1>
+        <p className="text-sm text-muted-foreground lg:text-base">
           Manage user accounts, roles, and permissions
         </p>
       </div>
@@ -174,7 +174,8 @@ export default function AdminUsersPage() {
             </div>
           ) : (
             <>
-              <Table>
+              <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
+              <Table className="min-w-[700px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>User</TableHead>
@@ -256,6 +257,7 @@ export default function AdminUsersPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
               {/* Pagination */}
               {totalPages > 1 && (

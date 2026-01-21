@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Role } from '@warehouse/shared';
 import { useAuth } from '@/lib/auth';
-import { Sidebar, Header } from '@/components/layout';
+import { Sidebar, SidebarProvider, Header } from '@/components/layout';
 
 export default function AdminLayout({
   children,
@@ -41,12 +41,14 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <Sidebar />
-      <div className="pl-64">
-        <Header />
-        <main className="p-6">{children}</main>
+    <SidebarProvider>
+      <div className="min-h-screen bg-muted/30">
+        <Sidebar />
+        <div className="lg:pl-64">
+          <Header />
+          <main className="p-4 lg:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }
